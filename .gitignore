@@ -1,0 +1,54 @@
+# 问墨·code 项目推送 GitHub 的 .gitignore（完善版）
+# 排除：运行时数据 / 大依赖 / 构建产物 / 爬虫测试残留 / 本地环境
+
+# ---- 运行时数据（不应入库）----
+workspace/
+history/
+files/
+apps/
+llama/
+skills_archive/
+*.log
+tasks.db
+usage_stats.json
+lessons.json
+_ecc_import_log.json
+
+# ---- 大依赖 / 构建产物 ----
+dist/
+build/
+deps/daily_stock_analysis/
+__pycache__/
+*.pyc
+.idea/
+问墨.spec
+
+# ---- 爬虫/调试测试残留 ----
+*.txt
+out3.txt
+star-letter.html
+MML2OMML.XSL
+
+# ---- 备份文件 ----
+*.bak
+*.bak-*
+
+# ---- 技能库（94MB，大量来自开源，不适合整体入库）----
+skills/
+skills_evolved/
+
+# ---- 凭据 ----
+.env
+providers.json   # 含 API key（用 providers.example.json 模板）
+*.key
+
+# ---- checkpoint 快照备份 ----
+.checkpoints/
+
+# ---- MCP 服务器依赖 ----
+mcp-servers/node_modules/
+mcp-servers/package-lock.json
+
+# ---- 打包辅助 ----
+ChineseSimplified.isl
+*.bak*

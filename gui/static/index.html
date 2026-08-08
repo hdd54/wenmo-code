@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>问墨·code · AI 助手</title>
+  <!-- Logo：水墨×电路图标（favicon + 顶栏） -->
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="apple-touch-icon" href="logo.png">
+  <!-- 预连接 CDN，让 marked.js 加载更快一点 -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <!-- KaTeX：公式渲染（本地文件） -->
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <!-- marked.js：AI 回复的 Markdown 渲染（本地文件，不依赖国外 CDN） -->
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/katex/katex.min.js"></script>
+</head>
+<body>
+  <div id="app">
+
+    <!-- 侧边栏：对话历史（对标 opencode 的会话管理） -->
+    <aside id="sidebar" aria-label="对话历史">
+      <!-- 项目图标栏（对标 opencode：最左侧图标列，点击切换项目） -->
+      <div id="project-rail" class="project-rail" aria-label="项目列表">
+        <button id="rail-new" class="rail-item rail-add" type="button" title="新建项目" aria-label="新建项目">＋</button>
+        <div id="rail-list" class="rail-list"></div>
+      </div>
+      <div id="sidebar-main" class="sidebar-main">
+      <!-- 当前项目文件夹路径（横排完整显示） -->
+      <div id="rail-path" class="rail-path" title="当前项目文件夹位置">…</div>
+      <div class="sidebar-head">
+        <span class="sidebar-title">对话历史</span>
+        <div class="sidebar-actions">
+          <button id="export-btn" class="mini-action-btn" type="button" title="导出当前对话">↓</button>
+          <button id="new-chat-btn" class="new-chat-btn" type="button" title="新对话">新对话</button>
+          <button id="sidebar-collapse-btn" class="mini-action-btn" type="button" title="收起侧边栏" aria-label="收起侧边栏">◀</button>
+        </div>
+      </div>
+      <!-- 项目选择（对标 opencode：可切换/新建/重命名/删除） -->
+      <div class="sidebar-project">
+        <button id="project-trigger" class="project-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="选择项目">
+          <span id="project-trigger-name">默认项目</span>
+          <svg class="project-chevron" width="12" height="12" viewBox="0 0 16 16" fill="none"
+               stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 6l4 4 4-4"/>
+          </svg>
+        </button>
+        <button id="project-add-btn" class="project-add-btn" type="button" title="新建项目">＋</button>
+        <button id="project-folder-btn" class="project-mini-btn" type="button" title="在资源管理器中打开项目文件夹" aria-label="打开项目文件夹">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+        </button>
+        <button id="project-edit-btn" class="project-mini-btn" type="button" title="重命名项目" aria-label="重命名项目">✎</button>
+        <button id="project-del-btn" class="project-mini-btn danger" type="button" title="删除项目" aria-label="删除项目">✕</button>
+        <ul id="project-menu" class="project-menu" role="menu" aria-label="项目菜单" hidden></ul>
+      </div>
+      <!-- 历史搜索 -->
+      <div class="sidebar-search">
+        <input id="history-search" type="text" placeholder="搜索历史…" aria-label="搜索历史" spellcheck="false" autocomplete="off">
+      </div>
+      <div id="history-list" class="history-list" role="list" aria-label="历史对话列表"></div>
+      <button id="history-more" class="history-more" type="button" hidden>加载更多</button>
+
+      <!-- 历史右键菜单 -->
+      <div id="history-ctx-menu" class="ctx-menu" role="menu" aria-label="历史操作" hidden></div>
+      </div><!-- /#sidebar-main -->
+    </aside>
+
+    <!-- 侧边栏拖拽手柄 -->
+    <div id="sidebar-resizer" class="sidebar-resizer" title="拖拽调整宽度"></div>
+    <!-- 侧边栏收起后的展开按钮 -->
+    <button id="sidebar-expand-btn" class="sidebar-expand-btn" type="button" title="展开侧边栏" aria-label="展开侧边栏" hidden>▶</button>
+
+    <div id="main">
+    <!-- 顶部栏：标题 + 状态灯 | 小应用图标区 | 供应商下拉 + 主题切换 -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <img src="logo.png" class="app-logo" alt="问墨·code" aria-hidden="true">
+        <h1 class="app-title">问墨·code</h1>
+        <span id="status-dot" class="status-dot idle" role="status" aria-live="polite" aria-label="在线"></span>
+      </div>
+      <!-- 小应用图标区（顶栏中间，点击打开自由窗口；多了横向滚动） -->
+      <div id="apps-dock" class="apps-dock" aria-label="小应用"></div>
+      <div class="topbar-right">
+        <div class="dropdown" id="provider-dropdown">
+          <button id="provider-trigger" class="dropdown-trigger" type="button"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="provider-menu"
+                  aria-label="选择模型供应商">
+            <span class="trigger-text">
+              <span id="trigger-name" class="trigger-name">加载中…</span>
+              <span id="trigger-model" class="trigger-model">—</span>
+            </span>
+            <svg class="chevron" width="14" height="14" viewBox="0 0 16 16" fill="none"
+                 stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 6l4 4 4-4"/>
+            </svg>
+          </button>
+          <ul id="provider-menu" class="dropdown-menu" role="listbox" aria-label="模型供应商列表" hidden></ul>
+        </div>
+
+        <button id="settings-btn" class="icon-btn" type="button" aria-label="设置 API Key" title="设置 API Key">
+          <!-- 齿轮图标：打开 API Key 设置弹窗 -->
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+
+        <button id="theme-toggle" class="icon-btn theme-toggle" type="button" aria-label="切换到浅色主题" title="切换到浅色主题">
+          <!-- 深色主题显示月亮；浅色主题显示太阳（类 is-light 切换） -->
+          <svg id="icon-moon" class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          <svg id="icon-sun" class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- 消息区（滚动容器） -->
+    <main id="messages" class="empty" role="log" aria-live="polite" aria-relevant="additions" aria-label="对话消息">
+      <!-- 空状态：首次对话前的安静问候 -->
+      <section id="empty-state" class="empty-state">
+        <img src="logo.png" class="empty-logo" alt="问墨·code" aria-hidden="true">
+        <p class="empty-motto">以墨载智，以问启思。</p>
+        <h2 class="empty-title">问墨·code</h2>
+        <p class="empty-tagline">10 家供应商 · 本地 GGUF 离线加载</p>
+        <div class="suggestions" role="group" aria-label="试试这些"></div>
+        <button id="load-local-btn" class="load-local-btn" type="button">加载本地 GGUF 模型（离线可用）</button>
+      </section>
+
+      <!-- 滚动离开底部时出现的“回到最新” -->
+      <button id="back-to-bottom" class="back-pill" type="button" hidden aria-label="回到最新消息">回到最新</button>
+      <!-- 历史回合锚点索引条：竖排短线，每条 = 一个用户提问回合，点击定位到该消息（对标 Codex） -->
+      <nav id="msg-anchors" class="msg-anchors" aria-label="对话历史定位" hidden></nav>
+    </main>
+
+    <!-- 输入区 -->
+    <footer class="composer">
+      <!-- 多步骤任务进度状态栏（对标 opencode：底部实时显示当前步骤） -->
+      <div id="task-status" class="task-status" hidden>
+        <span class="ts-spinner"><i></i><i></i><i></i></span>
+        <span id="ts-text" class="ts-text">准备中…</span>
+        <span id="ts-step" class="ts-step"></span>
+        <button id="ts-toggle" class="ts-toggle" type="button" title="展开/收起步骤详情" hidden>▾ 步骤</button>
+        <div id="ts-dropdown" class="ts-dropdown" hidden>
+          <div id="ts-proposal-sec" class="ts-drop-section" hidden>
+            <div class="ts-drop-title">方案设计</div>
+            <div id="ts-proposal-list" class="ts-drop-list"></div>
+          </div>
+          <div id="ts-plan-sec" class="ts-drop-section">
+            <div class="ts-drop-title">当前规划</div>
+            <div id="ts-plan-list" class="ts-drop-list"><div class="ts-drop-empty">暂无规划</div></div>
+          </div>
+          <div id="ts-history-sec" class="ts-drop-section" hidden>
+            <div class="ts-drop-title">历史步骤</div>
+            <div id="ts-history-list" class="ts-drop-list"></div>
+          </div>
+        </div>
+      </div>
+      <div id="send-queue" class="send-queue" hidden></div>
+      <div id="command-hint" class="command-hint" hidden>命令：/new 新对话 · /export 导出 · /load-local 加载模型 · /help</div>
+      <div id="attach-preview" class="attach-preview" hidden></div>
+      <div class="composer-inner">
+        <!-- 快捷指令菜单（输入 / 弹出） -->
+        <div id="command-menu" class="command-menu" hidden></div>
+        <button id="attach-btn" class="attach-btn" type="button" aria-label="添加图片附件" title="添加图片附件">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+          </svg>
+        </button>
+        <button id="mic-btn" class="attach-btn" type="button" aria-label="语音输入" title="语音输入（说中文，自动转文字）">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+        <input type="file" id="attach-input" accept="*/*" multiple hidden>
+        <textarea id="input" class="input-area" rows="1" spellcheck="false" autocapitalize="off" autocomplete="off"
+                  placeholder="问点什么…" aria-label="消息输入框"></textarea>
+        <button id="send-btn" class="send-btn" type="button" aria-label="发送" disabled>
+          <!-- 发送：上箭头；生成中：方块停止 -->
+          <svg id="send-icon" class="send-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 19V5"/>
+            <path d="M5 12l7-7 7 7"/>
+          </svg>
+          <svg id="stop-icon" class="stop-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" hidden>
+            <rect x="7" y="7" width="10" height="10" rx="2"/>
+          </svg>
+        </button>
+      </div>
+      <div class="composer-toolbar">
+        <button id="online-btn" class="tool-btn" type="button" aria-pressed="false" title="联网搜索：开启后 AI 可用搜索工具获取实时信息">🌐 联网</button>
+        <button id="reasoning-btn" class="tool-btn" type="button" title="深度思考：轻 / 中 / 深（默认中）" aria-haspopup="true">🧠 思考：中</button>
+        <button id="compare-btn" class="tool-btn" type="button" title="模型对比：同一个问题让两个模型分别回答">⚖️ 对比</button>
+        <button id="plan-btn" class="tool-btn" type="button" title="计划模式：只读规划，输出计划并经你确认后才执行（对标 opencode Plan/Build）">📋 计划</button>
+        <span id="reasoning-hint" class="tool-hint">轻=快但浅 · 中=均衡 · 深=推理强但慢</span>
+      </div>
+      <p class="hint">
+        <span class="stats-box" role="status" aria-live="polite">
+          <span class="stat">上下文 <b id="stat-ctx">0 / 0</b></span>
+          <span class="stat">本对话 <b id="stat-total">0</b> tokens</span>
+          <span class="stat">缓存命中 <b id="stat-cached">0</b></span>
+          <span class="stat">命中率 <b id="stat-hit">0%</b></span>
+          <span class="stat">费用 <b id="stat-cost">¥0.00</b></span>
+        </span>
+        <span id="hint-keys">Enter 发送 · Shift+Enter 换行</span>
+      </p>
+    </footer>
+    </div><!-- /#main -->
+
+    <!-- 文件预览右栏（点击文件链接打开；可拖宽） -->
+    <div id="file-panel-resizer" class="panel-resizer" title="拖拽调整宽度" hidden></div>
+    <aside id="file-panel" class="file-panel" aria-label="文件预览" hidden>
+      <div class="file-panel-head">
+        <span id="file-panel-title" class="file-panel-title">文件预览</span>
+        <div id="file-panel-mode" class="file-panel-mode" role="tablist" aria-label="预览模式"></div>
+        <div class="file-panel-actions">
+          <button id="file-panel-download" class="file-panel-btn" type="button" title="下载文件" aria-label="下载文件">⬇</button>
+          <button id="file-panel-open" class="file-panel-btn" type="button" title="用电脑上的软件打开（Word/Excel/PPT/VS Code…）" aria-label="用系统软件打开">打开</button>
+          <button id="file-panel-fullscreen" class="file-panel-btn" type="button" title="全屏" aria-label="全屏">⛶</button>
+          <button id="file-panel-close" class="file-panel-btn" type="button" title="关闭" aria-label="关闭">✕</button>
+        </div>
+      </div>
+      <div id="file-panel-body" class="file-panel-body"></div>
+    </aside>
+
+    <!-- API Key 设置弹窗 -->
+    <div id="settings-modal" class="modal" role="dialog" aria-modal="true"
+         aria-labelledby="settings-title" aria-describedby="settings-hint" hidden>
+      <div class="modal-backdrop"></div>
+      <div class="modal-panel" tabindex="-1">
+        <div class="modal-head">
+          <h2 id="settings-title" class="modal-title">设置</h2>
+          <button id="settings-close" class="icon-btn modal-close" type="button" aria-label="关闭设置" title="关闭设置">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6L6 18"/>
+              <path d="M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 分类标签页：避免超长单列滚动 -->
+        <div class="modal-tabs" role="tablist" aria-label="设置分类">
+          <button class="modal-tab" type="button" role="tab" data-tab="general">通用</button>
+          <button class="modal-tab active" type="button" role="tab" data-tab="providers">供应商</button>
+          <button class="modal-tab" type="button" role="tab" data-tab="models">图像模型与上下文</button>
+          <button class="modal-tab" type="button" role="tab" data-tab="tools">MCP、插件与技能</button>
+        </div>
+
+        <!-- 通用 -->
+        <div class="tab-panel" id="tab-general" role="tabpanel">
+          <div class="mcp-head">
+            <span class="mcp-title">通用设置</span>
+          </div>
+          <p class="mcp-hint">界面与交互偏好，修改后立即生效（保存在本机浏览器）</p>
+          <div class="gen-row">
+            <div class="gen-info">
+              <span class="gen-name">界面主题</span>
+              <span class="gen-desc">深色 / 浅色 / 跟随系统</span>
+            </div>
+            <select id="gen-theme" class="ctx-input gen-ctrl" aria-label="界面主题"></select>
+          </div>
+          <div class="gen-row">
+            <div class="gen-info">
+              <span class="gen-name">发送方式</span>
+              <span class="gen-desc">Enter 直接发送；或 Ctrl+Enter 发送、Enter 换行</span>
+            </div>
+            <select id="gen-send" class="ctx-input gen-ctrl" aria-label="发送方式"></select>
+          </div>
+          <div class="gen-row">
+            <div class="gen-info">
+              <span class="gen-name">思考摘要</span>
+              <span class="gen-desc">AI 的思考过程默认折叠还是展开</span>
+            </div>
+            <select id="gen-think" class="ctx-input gen-ctrl" aria-label="思考摘要默认状态"></select>
+          </div>
+          <div class="gen-row">
+            <div class="gen-info">
+              <span class="gen-name">💴 总计费</span>
+              <span class="gen-desc">查看所有对话的计费明细、按供应商/模型统计、时间维度汇总</span>
+            </div>
+            <button id="gen-billing-btn" class="ctx-input gen-ctrl billing-btn" type="button">查看计费 →</button>
+          </div>
+          <div class="mcp-head ctx-section">
+            <span class="mcp-title">权限（Permissions）</span>
+          </div>
+          <p class="mcp-hint">对标 opencode：控制 AI 可以自动做什么。修改立即生效</p>
+          <div class="gen-row">
+            <div class="gen-info">
+              <span class="gen-name">文件写入</span>
+              <span class="gen-desc">AI 写文件/创建文档时：允许 / 询问 / 拒绝</span>
+            </div>
+            <select id="perm-write" class="ctx-input gen-ctrl" aria-label="文件写入权限"></select>
+          </div>
+          <div class="gen-row">
+            <div class="gen-info">
+              <span class="gen-name">终端命令</span>
+              <span class="gen-desc">AI 执行电脑指令时：询问确认 / 自动允许 / 拒绝</span>
+            </div>
+            <select id="perm-command" class="ctx-input gen-ctrl" aria-label="终端命令权限"></select>
+          </div>
+          <div class="mcp-head ctx-section">
+            <span class="mcp-title">应用协作（小应用）</span>
+            <button id="apps-refresh-btn" class="mcp-refresh-btn" type="button">刷新</button>
+          </div>
+          <p class="mcp-hint">内置小挂件管理：打开即可使用（点击右上角可全屏/关闭）</p>
+          <div id="apps-list" class="mcp-list" role="list" aria-label="小应用列表"></div>
+        </div>
+
+        <!-- 供应商 -->
+        <div class="tab-panel active" id="tab-providers" role="tabpanel">
+          <p class="modal-hint">Key 只保存在服务器（providers.json），浏览器不会看到它</p>
+          <div id="settings-list" class="settings-list" role="list" aria-label="供应商列表"></div>
+        </div>
+
+        <!-- 图像模型与上下文（模型设置 + 上下文合并） -->
+        <div class="tab-panel active" id="tab-models" role="tabpanel">
+          <div class="mcp-head">
+            <span class="mcp-title">模型设置</span>
+            <button id="models-save-btn" class="mcp-refresh-btn" type="button">保存</button>
+          </div>
+          <p class="mcp-hint">文本模型 = 主对话默认使用的模型；图像模型 = see_image 看图时用的模型</p>
+          <div class="ctx-row">
+            <span class="ctx-label">文本模型</span>
+            <select id="models-text-model" class="ctx-input" aria-label="文本模型（所有供应商 + 本地模型）"></select>
+          </div>
+          <div class="ctx-row" id="models-text-custom-row" hidden>
+            <span class="ctx-label">自定义</span>
+            <select id="models-text-custom-provider" class="ctx-input" aria-label="自定义文本模型供应商"></select>
+            <input type="text" id="models-text-custom-model" class="ctx-input" placeholder="模型 ID，如 deepseek-chat" aria-label="自定义文本模型 ID">
+          </div>
+          <div class="ctx-row">
+            <span class="ctx-label">图像模型</span>
+            <select id="models-vision-model" class="ctx-input" aria-label="图像模型（所有供应商 + 本地模型）"></select>
+          </div>
+          <div class="ctx-row" id="models-vision-custom-row" hidden>
+            <span class="ctx-label">自定义</span>
+            <select id="models-vision-custom-provider" class="ctx-input" aria-label="自定义图像模型供应商"></select>
+            <input type="text" id="models-vision-custom-model" class="ctx-input" placeholder="模型 ID，如 qwen-vl-max" aria-label="自定义图像模型 ID">
+          </div>
+          <div class="ctx-row" id="models-feedback-row" hidden>
+            <span class="ctx-label"></span>
+            <span id="models-feedback" class="import-feedback" role="status"></span>
+          </div>
+          <div class="mcp-head ctx-section">
+            <span class="mcp-title">智能体（Agent）</span>
+          </div>
+          <p class="mcp-hint">子任务交给独立的智能体模型并行处理，主模型专注对话。留空 = 默认用当前对话模型</p>
+          <div class="ctx-row">
+            <span class="ctx-label">智能体文本</span>
+            <select id="models-agent-provider" class="ctx-input" aria-label="智能体文本模型供应商"></select>
+          </div>
+          <div class="ctx-row">
+            <span class="ctx-label">智能体模型</span>
+            <select id="models-agent-model" class="ctx-input" aria-label="智能体文本模型"></select>
+          </div>
+          <div class="ctx-row" id="models-agent-custom-row" hidden>
+            <span class="ctx-label">自定义</span>
+            <select id="models-agent-custom-provider" class="ctx-input" aria-label="自定义智能体供应商"></select>
+            <input type="text" id="models-agent-custom-model" class="ctx-input" placeholder="模型 ID" aria-label="自定义智能体模型 ID">
+          </div>
+          <div class="ctx-row">
+            <span class="ctx-label">智能体图像</span>
+            <select id="models-agent-vision-model" class="ctx-input" aria-label="智能体图像模型"></select>
+          </div>
+          <div class="ctx-row" id="models-agent-vision-custom-row" hidden>
+            <span class="ctx-label">自定义</span>
+            <select id="models-agent-vision-custom-provider" class="ctx-input" aria-label="自定义智能体图像供应商"></select>
+            <input type="text" id="models-agent-vision-custom-model" class="ctx-input" placeholder="图像模型 ID，如 qwen-vl-max" aria-label="自定义智能体图像模型 ID">
+          </div>
+          <div class="mcp-head ctx-section">
+            <span class="mcp-title">上下文管理（Context）</span>
+            <button id="ctx-save-btn" class="mcp-refresh-btn" type="button">保存</button>
+          </div>
+          <p class="mcp-hint">调整上下文上限（16K – 1M）。本地模型改动后自动重载生效</p>
+          <div class="ctx-row">
+            <span class="ctx-label">本地模型上限</span>
+            <input type="number" id="ctx-local" class="ctx-input" min="16384" max="1048576" step="16384" aria-label="本地模型上下文上限">
+          </div>
+          <div class="ctx-row">
+            <span class="ctx-label">云端模型上限</span>
+            <input type="number" id="ctx-remote" class="ctx-input" min="16384" max="1048576" step="16384" aria-label="云端模型上下文上限">
+          </div>
+          <div id="ctx-resources" class="ctx-resources" role="status" aria-live="polite"></div>
+        </div>
+
+        <!-- MCP、插件与技能（合并显示） -->
+        <div class="tab-panel" id="tab-tools" role="tabpanel">
+          <div class="mcp-head">
+            <span class="mcp-title">MCP 工具服务器</span>
+            <button id="mcp-refresh-btn" class="mcp-refresh-btn" type="button">刷新</button>
+          </div>
+          <p class="mcp-hint">已连接的服务器会把工具交给 AI 调用（如搜索知识库、读文件）</p>
+          <div id="mcp-list" class="mcp-list" role="list" aria-label="MCP 服务器列表"></div>
+
+          <div class="mcp-head ctx-section">
+            <span class="mcp-title">技能库（Skills）</span>
+            <button id="skills-refresh-btn" class="mcp-refresh-btn" type="button">刷新</button>
+          </div>
+          <p class="mcp-hint">来自 opencode 技能目录：通用技能时刻生效，个性技能聊天时按内容自动匹配注入</p>
+          <div id="skills-list" class="mcp-list" role="list" aria-label="技能列表"></div>
+
+          <div class="mcp-head ctx-section">
+            <span class="mcp-title">插件（Plugins）</span>
+            <button id="plugins-refresh-btn" class="mcp-refresh-btn" type="button">刷新</button>
+          </div>
+          <p class="mcp-hint">plugins/ 目录下的 Python 插件，工具自动交给 AI 调用</p>
+          <div id="plugins-list" class="mcp-list" role="list" aria-label="插件列表"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 计费统计弹窗（设置 → 通用 → 总计费） -->
+    <div id="billing-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="billing-title" hidden>
+      <div class="modal-overlay" data-billing-close></div>
+      <div class="modal-panel billing-panel" role="document">
+        <div class="modal-head">
+          <span class="modal-title" id="billing-title">💴 计费统计</span>
+          <button type="button" class="modal-close" data-billing-close aria-label="关闭计费">✕</button>
+        </div>
+        <!-- 总计 + 时间窗口切换 -->
+        <div class="billing-summary">
+          <div class="billing-total">总费用 <b id="billing-total">¥0.00</b></div>
+          <div class="billing-windows">
+            <button class="bw-btn active" data-bw="today">今日</button>
+            <button class="bw-btn" data-bw="week">本周</button>
+            <button class="bw-btn" data-bw="month">本月</button>
+            <button class="bw-btn" data-bw="year">今年</button>
+            <button class="bw-btn" data-bw="all">全部</button>
+          </div>
+        </div>
+        <!-- 视图切换：对话明细 / 供应商统计 -->
+        <div class="billing-tabs">
+          <button class="bt-tab active" data-bt="conv">对话明细</button>
+          <button class="bt-tab" data-bt="model">供应商统计</button>
+        </div>
+        <!-- 对话明细视图 -->
+        <div id="billing-conv" class="billing-view">
+          <div class="billing-list" id="billing-conv-list"></div>
+        </div>
+        <!-- 供应商统计视图（分模型条形图 + 每日趋势） -->
+        <div id="billing-model" class="billing-view" hidden>
+          <div class="billing-chart-title">按供应商 · 模型</div>
+          <div id="billing-model-bars" class="billing-bars"></div>
+          <div class="billing-chart-title">每日费用趋势</div>
+          <div id="billing-daily-bars" class="billing-bars daily"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ask_user 询问弹窗（AI 不确定时询问用户，对标 opencode） -->
+    <div id="ask-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="ask-title" hidden>
+      <div class="modal-backdrop"></div>
+      <div class="modal-panel ask-panel" tabindex="-1">
+        <div class="modal-head">
+          <h2 id="ask-title" class="modal-title">AI 需要确认</h2>
+        </div>
+        <p id="ask-question" class="ask-question"></p>
+        <div id="ask-options" class="ask-options" role="group" aria-label="选项"></div>
+        <textarea id="ask-input" class="ask-input" placeholder="或输入你的回答…" rows="2" aria-label="你的回答"></textarea>
+        <div class="ask-actions">
+          <button id="ask-cancel" class="edit-cancel" type="button">取消</button>
+          <button id="ask-submit" class="edit-save" type="button">发送</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 链接预览浮层（点击消息里的网页链接 -> 先预览，不直接跳转） -->
+    <div id="link-preview-modal" class="modal" role="dialog" aria-modal="true" aria-label="链接预览" hidden>
+      <div class="modal-backdrop"></div>
+      <div class="modal-panel link-preview-panel" tabindex="-1">
+        <div class="modal-head link-preview-head">
+          <div class="link-preview-url">
+            <span class="link-preview-favicon" id="link-preview-favicon" aria-hidden="true">🔗</span>
+            <span id="link-preview-domain" class="link-preview-domain"></span>
+            <span id="link-preview-path" class="link-preview-path"></span>
+          </div>
+          <div class="link-preview-actions">
+            <button id="link-preview-open" class="file-panel-btn link-preview-btn" type="button" title="在新标签页打开">在新标签页打开 ↗</button>
+            <button id="link-preview-copy" class="file-panel-btn link-preview-btn" type="button" title="复制链接地址">复制链接</button>
+            <button id="link-preview-close" class="file-panel-btn link-preview-btn" type="button" title="关闭预览" aria-label="关闭预览">✕</button>
+          </div>
+        </div>
+        <div id="link-preview-body" class="link-preview-body">
+          <div id="link-preview-loading" class="link-preview-loading">正在加载预览…</div>
+          <div id="link-preview-fail" class="link-preview-fail" hidden>
+            <p>此网站可能禁止在预览框中显示（网站设置了安全策略）。</p>
+            <button id="link-preview-fail-open" class="edit-save" type="button">在新标签页打开 ↗</button>
+          </div>
+          <iframe id="link-preview-frame" class="link-preview-frame" title="网页预览" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerpolicy="no-referrer"></iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- 小应用窗口：动态创建，可同时开多个（openAppWindow） -->
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

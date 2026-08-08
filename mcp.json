@@ -1,0 +1,61 @@
+{
+  "importFromOpencode": "C:\\Users\\25300\\.config\\opencode\\opencode.json",
+  "max_tools": 999,
+  "servers": {
+    "demo": {
+      "command": [
+        "D:\\Anaconda32024\\python.exe",
+        "D:\\桌面\\聊天+AI\\agent-tutorial\\mcp_demo_server.py"
+      ],
+      "env": {}
+    },
+    "websearch": {
+      "command": [
+        "D:\\Anaconda32024\\python.exe",
+        "D:\\桌面\\聊天+AI\\agent-tutorial\\websearch_mcp_server.py"
+      ],
+      "env": {}
+    },
+    "filesystem-mcp": {
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "D:\\桌面\\聊天+AI\\agent-tutorial\\workspace"
+      ],
+      "env": {}
+    },
+    "playwright": {
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp@latest",
+        "--browser",
+        "msedge"
+      ],
+      "env": {}
+    },
+    "file-mcp": {
+      "command": [
+        "D:\\Anaconda32024\\python.exe",
+        "D:\\桌面\\聊天+AI\\agent-tutorial\\file_mcp_server.py"
+      ],
+      "env": {}
+    },
+    "ppt-pipeline": {
+      "command": [
+        "D:\\Anaconda32024\\python.exe",
+        "D:\\桌面\\聊天+AI\\agent-tutorial\\ppt_pipeline_mcp_server.py"
+      ],
+      "env": {}
+    },
+    "page-agent": {
+      "command": ["npx", "-y", "@page-agent/mcp"],
+      "env": {
+        "LLM_BASE_URL": "https://api.deepseek.com",
+        "LLM_API_KEY": "sk-cee1958e5f3e434d9938bcbf612bf964",
+        "LLM_MODEL_NAME": "deepseek-v4-flash"
+      }
+    }
+  }
+}
