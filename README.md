@@ -1,6 +1,6 @@
 # 问墨·code
 
-以墨载智，以问启思。一款本地优先的 AI 聊天 / 编码 Agent，支持多模型供应商、371+ 技能库、插件系统、多用户 GitHub 登录与自动更新。
+以墨载智，以问启思。一款本地优先的 AI 聊天 / 编码 Agent，支持多模型供应商、371+ 技能库、插件系统与自动更新。
 
 ## ✨ 核心功能
 
@@ -31,6 +31,7 @@
 | **系统** | 系统信息、磁盘用量、数学计算、JSON 处理、Inno Setup 打包 |
 
 ### 🧩 小应用（apps/，可自由拖动的悬浮窗口）
+内置 3 个示例应用，**你也可以让问墨自己创建/修改小应用**（对话里描述需求即可生成 HTML 小应用）：
 - **时钟**：桌面时钟 + 番茄计时 + 历史记录 + 媒体播放
 - **股票监控**：实时行情悬浮窗
 - **系统监控**：CPU/内存/磁盘实时图表
@@ -40,25 +41,6 @@ websearch（搜索）、filesystem（文件）、playwright（浏览器自动化
 
 ### 🎓 技能库（371+ 技能）
 整合 opencode / ECC / Anthropic Skills 生态：前端设计（anti-slop）、网络安全审计、测试驱动、系统调试、文档写作、各语言框架（Python/JS/Go/Rust/Django/React）等。按需加载、中文触发词自动匹配。
-
-## 🔐 登录（GitHub OAuth，可选）
-
-**不登录也能使用全部功能**——登录只是获得"每账号独立数据"（对话历史/工作区/文件互不干扰）。
-
-1. 在 [GitHub 开发者设置](https://github.com/settings/developers) 创建 OAuth App：
-   - Homepage URL: `http://localhost:8000`
-   - Callback URL: `http://localhost:8000/api/auth/github/callback`
-2. 配置凭据（写入 `settings.json` 或环境变量）：
-```json
-{
-  "github_client_id": "你的ClientID",
-  "github_client_secret": "你的ClientSecret",
-  "base_url": "http://localhost:8000"
-}
-```
-3. 重启后点击界面右上角「登录」→ GitHub 授权 → 自动回跳
-
-> 详细说明见 `README_AUTH.md`
 
 ## 🔄 自动更新
 
@@ -96,7 +78,7 @@ python gui_server.py
 agent-tutorial/
 ├── gui_server.py          # 服务器主程序（FastAPI）
 ├── gui/static/            # 前端（原生 JS，无框架）
-├── auth.py                # 用户登录（GitHub OAuth）
+├── auth.py                # 用户认证模块（预留）
 ├── updater.py             # 自动更新
 ├── memory_graph.py        # 记忆图（跨会话召回）
 ├── history.py             # 对话历史存储（按项目/用户分目录）
