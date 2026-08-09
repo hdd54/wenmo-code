@@ -52,3 +52,10 @@ mcp-servers/package-lock.json
 # ---- 打包辅助 ----
 ChineseSimplified.isl
 *.bak*
+
+# 运行时配置（含 key）
+providers.json
+settings.json
+
+# ---- 用户数据（登录）----
+users.jsonsessions.json

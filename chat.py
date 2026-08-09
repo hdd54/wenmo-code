@@ -15,7 +15,9 @@ import sys
 
 import requests
 
-PROVIDERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "providers.json")
+PROVIDERS_FILE = os.path.join(
+    os.environ.get("WENMO_DATA_DIR") or os.path.dirname(os.path.abspath(__file__)),
+    "providers.json")  # 打包版：配置读数据目录（%APPDATA%/问墨），可写可持久
 
 
 def load_providers():

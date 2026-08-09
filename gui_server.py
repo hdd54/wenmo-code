@@ -1,4 +1,17 @@
-﻿"""
+# --- PyInstaller windowed stdio fix ---
+# 当以 PyInstaller windowed（无控制台）模式打包运行时，sys.stdout/stderr/stdin
+# 为 None；uvicorn 初始化日志格式器时调用 sys.stdout.isatty() 会崩溃（AttributeError）。
+# 此处将 None 重定向到空设备，保证程序正常启动。
+import sys as _sys, os as _os
+if _sys.stdout is None:
+    _sys.stdout = open(_os.devnull, "w", encoding="utf-8")
+if _sys.stderr is None:
+    _sys.stderr = open(_os.devnull, "w", encoding="utf-8")
+if _sys.stdin is None:
+    _sys.stdin = open(_os.devnull, "r", encoding="utf-8")
+# --- end PyInstaller windowed stdio fix ---
+
+"""
 GUI 后端（第二课上半场）：
 把第一课 chat.py 的聊天能力变成 HTTP 服务，前端页面通过 SSE 流式接收回复。
 
@@ -83,6 +96,29 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "gui", "static")
 
 # ---- 打包适配（顶部 import 前已设 WENMO_DATA_DIR/WENMO_RES_DIR）：这里只重定向 STATIC_DIR ----
+# 首次启动引导：把打包自带的默认配置（providers/settings/mcp.json）复制到数据目录，
+# 之后用户保存的 key/设置都写数据目录（可写、持久、不随安装目录变化）
+if getattr(sys, "frozen", False) and os.environ.get("WENMO_DATA_DIR"):
+    _cfg_boot_done = False
+    try:
+        _data_root = os.environ["WENMO_DATA_DIR"]
+        _src_candidates = [os.path.dirname(sys.executable), getattr(sys, "_MEIPASS", "")]
+        for _cfg_name in ("providers.json", "settings.json", "mcp.json"):
+            _dst = os.path.join(_data_root, _cfg_name)
+            if os.path.isfile(_dst):
+                continue  # 已有用户配置，不动
+            for _src_dir in _src_candidates:
+                _src = os.path.join(_src_dir, _cfg_name)
+                if os.path.isfile(_src):
+                    try:
+                        shutil.copy2(_src, _dst)
+                        _cfg_boot_done = True
+                    except Exception:
+                        pass
+                    break
+    except Exception:
+        pass
+
 if getattr(sys, "frozen", False):
     _res_root = os.environ.get("WENMO_RES_DIR") or BASE_DIR
     STATIC_DIR = os.path.join(_res_root, "gui", "static")
@@ -550,7 +586,7 @@ def list_skills():
 # ============================================================================
 # 上下文设置（16K ~ 1M 可调）+ 系统资源检测（内存/显存）
 # ============================================================================
-SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
+SETTINGS_FILE = os.path.join(os.environ.get("WENMO_DATA_DIR") or BASE_DIR, "settings.json")  # 打包版：读数据目录
 DEFAULT_SETTINGS = {"local_ctx": 16384, "remote_ctx": 32768, "vision_provider": "", "vision_model": "",
 "default_provider": "", "default_model": "", "agent_provider": "", "agent_model": "",
 "agent_vision_provider": "", "agent_vision_model": "",
@@ -2192,6 +2228,106 @@ def history_delete(cid: str):
     return {"ok": history_store.delete_conversation(cid)}
 
 
+# ==================== 用户登录（GitHub OAuth）====================
+import auth as auth_module
+from fastapi import Request as _AuthRequest
+
+def _get_auth_token(request):
+    """从请求头取会话 token（前端带 X-Wenmo-Token 头）"""
+    return request.headers.get("X-Wenmo-Token", "").strip()
+
+
+@app.get("/api/auth/status")
+async def auth_status(request: _AuthRequest):
+    """登录状态：返回当前用户（无 token 时未登录）"""
+    token = _get_auth_token(request)
+    login = auth_module.validate_session(token) if token else None
+    if login:
+        u = auth_module.get_user(login)
+        return {"logged_in": True, "user": u}
+    return {"logged_in": False, "user": None,
+            "oauth_configured": auth_module.is_configured()}
+
+
+@app.get("/api/auth/login")
+async def auth_login():
+    """跳转到 GitHub OAuth 授权页"""
+    if not auth_module.is_configured():
+        return {"error": "OAuth 未配置（需 GITHUB_CLIENT_ID/SECRET）"}
+    return {"url": auth_module.github_oauth_url()}
+
+
+@app.get("/api/auth/github/callback")
+async def auth_github_callback(code: str = "", state: str = ""):
+    """GitHub OAuth 回调：换 token → 取用户 → 建会话 → 重定向回前端"""
+    if not code:
+        return {"error": "缺少授权码"}
+    tok = auth_module.github_exchange_code(code)
+    if tok.get("error"):
+        return {"error": f"OAuth 失败: {tok['error']}"}
+    user = auth_module.github_get_user(tok.get("access_token", ""))
+    if user.get("error"):
+        return {"error": f"获取用户失败: {user['error']}"}
+    login = user.get("login", "")
+    if not login:
+        return {"error": "GitHub 返回无 login"}
+    auth_module.upsert_user(login, user)
+    session_token = auth_module.create_session(login)
+    # 前端通过 localStorage 读取 token（重定向带 token 参数）
+    return Response(
+        content=(
+            "<html><body><script>"
+            f"localStorage.setItem('wenmo_token', '{session_token}');"
+            f"localStorage.setItem('wenmo_user', JSON.stringify({json.dumps(auth_module.get_user(login))}));"
+            "window.location.href='/';"
+            "</script></body></html>"
+        ),
+        media_type="text/html",
+    )
+
+
+@app.post("/api/auth/logout")
+async def auth_logout(request: _AuthRequest):
+    """登出：清除会话 token"""
+    token = _get_auth_token(request)
+    if token:
+        auth_module.logout_session(token)
+    return {"ok": True}
+
+
+@app.get("/api/auth/users")
+async def auth_users():
+    """管理员：查看已注册用户列表"""
+    return {"users": auth_module.list_users()}
+
+
+# ==================== 自动更新（GitHub Releases）====================
+import updater as updater_module
+@app.get("/api/version")
+async def api_version():
+    """返回当前版本号（前端设置-通用页显示用）"""
+    return {"version": updater_module.APP_VERSION, "name": "问墨·code"}
+
+
+@app.get("/api/update/check")
+async def update_check():
+    """检查 GitHub Releases 是否有新版本。返回 {has_update, version, notes, url}"""
+    try:
+        info = updater_module.check_update()
+        if info:
+            return {
+                "has_update": True,
+                "version": info.get("version"),
+                "notes": (info.get("notes") or "")[:500],
+                "url": info.get("url", ""),
+                "asset_name": info.get("asset_name", ""),
+                "current": updater_module.APP_VERSION,
+            }
+        return {"has_update": False, "current": updater_module.APP_VERSION}
+    except Exception as e:
+        return {"has_update": False, "error": str(e), "current": updater_module.APP_VERSION}
+
+
 @app.get("/api/projects")
 def projects_list():
     """项目列表（每个项目有独立的对话历史）"""
@@ -2352,7 +2488,7 @@ def save_key(req: KeySettings):
     providers[req.provider]["api_key"] = req.api_key.strip()
     if req.model.strip():
         providers[req.provider]["model"] = req.model.strip()
-    with open(os.path.join(BASE_DIR, "providers.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(os.environ.get("WENMO_DATA_DIR") or BASE_DIR, "providers.json"), "w", encoding="utf-8") as f:  # 打包版写数据目录
         json.dump(providers, f, ensure_ascii=False, indent=2)
     return {"ok": True, "provider": req.provider, "has_key": bool(req.api_key.strip())}
 
@@ -3270,5 +3406,89 @@ async def no_cache_static(request, call_next):
         response.headers["Cache-Control"] = "no-store"
     return response
 
+def _find_server_port(preferred=8000):
+    """端口自适应：8000 被占用时自动 +1 找空闲端口，支持新旧实例共存"""
+    import socket
+    for port in range(preferred, preferred + 50):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    return preferred
+
+
+def _wait_server(port, timeout=20):
+    """等待服务器就绪"""
+    url = f"http://127.0.0.1:{port}/"
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=1) as r:
+                if r.status == 200:
+                    return True
+        except Exception:
+            time.sleep(0.3)
+    return False
+
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # ===== 单实例锁：同一时间只允许一个问墨，避免多开卡后台 =====
+    import ctypes as _ct
+    _mutex = _ct.windll.kernel32.CreateMutexW(None, False, "WenMo_Single_Instance_Mutex")
+    if _ct.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        try:
+            _ct.windll.user32.MessageBoxW(None, "问墨已经在运行中！\n\n同一时间只允许启动一个问墨，请勿重复打开。", "问墨·code", 0x40)
+        except Exception:
+            pass
+        sys.exit(0)
+
+    # ===== 固定端口 8000（单实例，不再顺延） =====
+    port = 8000
+    import socket as _sock
+    with _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM) as _s:
+        try:
+            _s.bind(("127.0.0.1", port))
+        except OSError:
+            try:
+                _ct.windll.user32.MessageBoxW(None, "端口 8000 已被其他程序占用，问墨无法启动。\n请关闭占用端口的程序后重试。", "问墨·code", 0x10)
+            except Exception:
+                pass
+            sys.exit(1)
+
+    def _run_server():
+        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+
+    t = threading.Thread(target=_run_server, daemon=True)
+    t.start()
+    _wait_server(port)
+
+    # ===== 桌面版：pywebview 原生窗口（像 Codex 桌面应用一样） =====
+    try:
+        import webview
+        webview.create_window("问墨·code", "http://127.0.0.1:%d" % port,
+                              width=1280, height=820, min_size=(960, 600),
+                              )
+        webview.start()
+    except Exception as _e:
+        # 桌面窗口失败：记录日志 + 弹窗提示，最后才回退浏览器
+        try:
+            _log_dir = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "问墨")
+            os.makedirs(_log_dir, exist_ok=True)
+            with open(os.path.join(_log_dir, "webview_error.log"), "a", encoding="utf-8") as _f:
+                _f.write("[" + time.strftime("%Y-%m-%d %H:%M:%S") + "] " + repr(_e) + "\n")
+        except Exception:
+            pass
+        try:
+            _ct.windll.user32.MessageBoxW(None,
+                "桌面窗口启动失败，将改用浏览器打开。\n错误：%s\n\n详情已写入 %%APPDATA%%\\问墨\\webview_error.log" % _e,
+                "问墨·code", 0x30)
+        except Exception:
+            pass
+        import webbrowser
+        try:
+            webbrowser.open("http://127.0.0.1:%d" % port)
+        except Exception:
+            pass
+        t.join()

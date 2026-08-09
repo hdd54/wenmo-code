@@ -18,11 +18,11 @@ import tempfile
 import urllib.request
 
 # 更新源：GitHub Releases 或自建服务器
-# GitHub 方案：设置 GITHUB_REPO = "用户名/仓库名"（如 "yourname/wenmo"），自动用 GitHub Releases API
+# GitHub 方案：设置 GITHUB_REPO = "用户名/仓库名"，自动用 GitHub Releases API
 # 自建服务器方案：设置 UPDATE_URL（指向含 update.json 的目录）
-GITHUB_REPO = os.environ.get("WENMO_GITHUB_REPO", "").strip()   # 如 "yourname/wenmo"
+GITHUB_REPO = os.environ.get("WENMO_GITHUB_REPO", "").strip() or "hdd54/wenmo-code"
 UPDATE_URL = os.environ.get("WENMO_UPDATE_URL", "").rstrip("/")
-APP_VERSION = "1.0.0"   # 当前版本（与打包脚本同步）
+APP_VERSION = "1.0.1"   # 当前版本（与打包脚本同步）
 
 _STATE_FILE = None   # 初始化时设置
 

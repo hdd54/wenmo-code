@@ -16,9 +16,15 @@ BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history")
 PROJECTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "projects.json")
 DEFAULT_PROJECT = "default"
 # 打包版：数据目录优先用 WENMO_DATA_DIR（%APPDATA%/问墨），否则用项目内 history/
+# 用户隔离：登录时前端带 X-Wenmo-Token → 服务端校验 → 设置 WENMO_USER_DIR（每账号独立目录）
 import os as _os
 _env_data = _os.environ.get("WENMO_DATA_DIR")
-if _env_data:
+_env_user = _os.environ.get("WENMO_USER_DIR")
+if _env_user:
+    # 已登录用户：数据存 <data>/users/<login>/
+    BASE = _os.path.join(_env_user, "history")
+    PROJECTS_FILE = _os.path.join(_env_user, "projects.json")
+elif _env_data:
     BASE = _os.path.join(_env_data, "history")
     PROJECTS_FILE = _os.path.join(_env_data, "projects.json")
 os.makedirs(BASE, exist_ok=True)

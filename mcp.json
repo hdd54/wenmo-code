@@ -1,5 +1,4 @@
 {
-  "importFromOpencode": "C:\\Users\\25300\\.config\\opencode\\opencode.json",
   "max_tools": 999,
   "servers": {
     "demo": {
@@ -50,11 +49,41 @@
       "env": {}
     },
     "page-agent": {
-      "command": ["npx", "-y", "@page-agent/mcp"],
+      "command": [
+        "npx",
+        "-y",
+        "@page-agent/mcp"
+      ],
       "env": {
         "LLM_BASE_URL": "https://api.deepseek.com",
-        "LLM_API_KEY": "sk-cee1958e5f3e434d9938bcbf612bf964",
+        "LLM_API_KEY": "",
         "LLM_MODEL_NAME": "deepseek-v4-flash"
+      }
+    },
+    "playwright-mcp": {
+      "command": [
+        "node",
+        "C:\\Users\\25300\\.config\\opencode\\mcp-servers\\node_modules\\@playwright\\mcp\\cli.js"
+      ],
+      "env": {}
+    },
+    "github-mcp": {
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "kb-gui-mcp": {
+      "command": [
+        "D:\\桌面\\科研工具\\kb-gui\\.venv-mcp\\Scripts\\python.exe",
+        "D:\\桌面\\科研工具\\kb-gui\\kb_mcp_server.py"
+      ],
+      "env": {
+        "KB_NOTES_DIR": "D:\\桌面\\科研工具\\kb-gui\\notes"
       }
     }
   }

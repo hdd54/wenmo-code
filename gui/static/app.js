@@ -1,3 +1,11 @@
+function loadVersion() {
+  var el = document.getElementById("gen-version");
+  if (!el) return;
+  fetch("/api/version").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    if (d && d.version) el.textContent = "问墨·code v" + d.version;
+    else el.textContent = "未知";
+  }).catch(function () { el.textContent = "未知"; });
+}
 /* ============================================================================
  * Agent Tutorial · Chat — 前端逻辑（原生 JS，无框架）
  *
@@ -4000,6 +4008,7 @@ var EYE_OFF_SVG =
   '<line x1="1" y1="1" x2="23" y2="23"/></svg>';
 
 function openSettings(focusLocal) {
+  loadVersion();
   if (settingsOpen) return;
   settingsOpen = true;
   settingsFocusLocal = Boolean(focusLocal);
@@ -8747,6 +8756,214 @@ function init() {
   initSidebarCollapse();
   initApps();
   initStatsAutoRefresh();
+  initAuth();
+  checkForUpdate();
+}
+
+/* ---------- 自动更新检查（GitHub Releases）---------- */
+function checkForUpdate() {
+  fetch("/api/update/check")
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.has_update) {
+        showUpdatePrompt(d);
+      }
+    })
+    .catch(function () { /* 网络错误忽略，下次启动再查 */ });
+}
+
+/** 更新提示弹窗：版本 + 变更日志 + 下载安装 */
+function showUpdatePrompt(info) {
+  var old = document.getElementById("update-modal");
+  if (old) old.remove();
+  var overlay = document.createElement("div");
+  overlay.id = "update-modal";
+  overlay.className = "modal-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;z-index:800;background:rgba(0,0,0,0.6);display:grid;place-items:center;";
+  var panel = document.createElement("div");
+  panel.className = "update-panel";
+  panel.style.cssText = "width:420px;max-width:92vw;background:var(--surface,#1e1f22);border:1px solid var(--accent-border);border-radius:14px;padding:24px;";
+  // 标题
+  var title = document.createElement("div");
+  title.textContent = "发现新版本 v" + info.version;
+  title.style.cssText = "font-size:17px;font-weight:700;margin-bottom:8px;color:var(--accent,#4c9aff);";
+  panel.appendChild(title);
+  // 当前版本
+  var cur = document.createElement("div");
+  cur.textContent = "当前版本 v" + info.current;
+  cur.style.cssText = "font-size:12px;color:var(--text-secondary,#9a9a9a);margin-bottom:12px;";
+  panel.appendChild(cur);
+  // 变更日志
+  if (info.notes) {
+    var notes = document.createElement("div");
+    notes.textContent = info.notes;
+    notes.style.cssText = "font-size:13px;color:var(--text,#e8e8e8);background:var(--hover,rgba(255,255,255,0.05));border-radius:8px;padding:12px;margin-bottom:16px;max-height:180px;overflow-y:auto;white-space:pre-wrap;";
+    panel.appendChild(notes);
+  }
+  // 按钮行
+  var btns = document.createElement("div");
+  btns.style.cssText = "display:flex;gap:10px;justify-content:flex-end;";
+  var skip = document.createElement("button");
+  skip.type = "button";
+  skip.textContent = "稍后";
+  skip.style.cssText = "padding:8px 18px;border-radius:8px;border:1px solid var(--border-strong);background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer;";
+  skip.addEventListener("click", function () { overlay.remove(); });
+  var download = document.createElement("button");
+  download.type = "button";
+  download.textContent = "下载安装";
+  download.style.cssText = "padding:8px 18px;border-radius:8px;border:none;background:var(--accent,#4c9aff);color:#fff;font-size:13px;font-weight:600;cursor:pointer;";
+  download.addEventListener("click", function () {
+    download.disabled = true;
+    download.textContent = "正在下载…";
+    // 直接打开下载 URL（浏览器下载 install.exe，用户手动安装）
+    if (info.url) {
+      window.open(info.url, "_blank");
+      overlay.remove();
+    }
+  });
+  btns.appendChild(skip);
+  btns.appendChild(download);
+  panel.appendChild(btns);
+  overlay.appendChild(panel);
+  overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+/* ---------- 用户登录（GitHub OAuth）---------- */
+function initAuth() {
+  var loginBtn = document.getElementById("login-btn");
+  var userBtn = document.getElementById("user-btn");
+  var userAvatar = document.getElementById("user-avatar");
+  var userName = document.getElementById("user-name");
+  if (!loginBtn) return;
+
+  // 从 localStorage 恢复登录态
+  var token = "";
+  var user = null;
+  try {
+    token = localStorage.getItem("wenmo_token") || "";
+    var rawUser = localStorage.getItem("wenmo_user");
+    if (rawUser) user = JSON.parse(rawUser);
+  } catch (e) { /* 忽略 */ }
+
+  function showLoggedIn(u) {
+    loginBtn.hidden = true;
+    userBtn.hidden = false;
+    if (u && u.avatar) { userAvatar.src = u.avatar; userAvatar.hidden = false; }
+    userName.textContent = u ? (u.name || u.login || "") : "";
+    userBtn.title = "当前用户：" + (u ? u.login : "") + "（点击登出）";
+  }
+  function showLoggedOut() {
+    loginBtn.hidden = false;
+    userBtn.hidden = true;
+    userAvatar.hidden = true;
+    userName.textContent = "";
+  }
+
+  // 验证 token 有效性（服务端校验）
+  if (token) {
+    fetch("/api/auth/status", { headers: { "X-Wenmo-Token": token } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.logged_in && d.user) { showLoggedIn(d.user); }
+        else { showLoggedOut(); }
+      })
+      .catch(function () { showLoggedOut(); });
+  } else if (user) {
+    showLoggedOut();      // 无 token → 视为未登录（会话已失效）
+  } else {
+    showLoggedOut();
+  }
+
+  // 登录：跳转 GitHub OAuth
+  loginBtn.addEventListener("click", function () {
+    fetch("/api/auth/login")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.url) window.location.href = d.url;
+        else alert(d.error || "登录不可用");
+      })
+      .catch(function () { alert("无法连接服务器"); });
+  });
+
+  // 点击头像 → 个人信息弹窗（含登出按钮）
+  userBtn.addEventListener("click", function () {
+    var rawUser = null;
+    try { rawUser = JSON.parse(localStorage.getItem("wenmo_user") || "null"); } catch (e) { /* 忽略 */ }
+    showUserProfile(rawUser);
+  });
+
+  // 登出（个人弹窗里调用）
+  window.wenmoLogout = function () {
+    var t = localStorage.getItem("wenmo_token") || "";
+    fetch("/api/auth/logout", { method: "POST", headers: { "X-Wenmo-Token": t } })
+      .then(function () {
+        localStorage.removeItem("wenmo_token");
+        localStorage.removeItem("wenmo_user");
+        showLoggedOut();
+      })
+      .catch(function () { /* 忽略 */ });
+  };
+}
+
+/** 个人信息弹窗：头像 + 用户名 + GitHub 主页 + 登出按钮 */
+function showUserProfile(u) {
+  var old = document.getElementById("user-profile-modal");
+  if (old) old.remove();
+  var overlay = document.createElement("div");
+  overlay.id = "user-profile-modal";
+  overlay.className = "modal-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.55);display:grid;place-items:center;";
+  var panel = document.createElement("div");
+  panel.className = "user-profile-panel";
+  panel.style.cssText = "width:300px;max-width:90vw;background:var(--surface,#1e1f22);border:1px solid var(--border-strong);border-radius:14px;padding:24px;text-align:center;";
+  // 头像
+  var avatar = document.createElement("img");
+  avatar.src = (u && u.avatar) ? u.avatar : "";
+  avatar.alt = "头像";
+  avatar.style.cssText = "width:64px;height:64px;border-radius:50%;object-fit:cover;margin:0 auto 12px;display:block;";
+  panel.appendChild(avatar);
+  // 用户名
+  var name = document.createElement("div");
+  name.textContent = (u && (u.name || u.login)) || "未知用户";
+  name.style.cssText = "font-size:16px;font-weight:600;margin-bottom:4px;";
+  panel.appendChild(name);
+  // GitHub 账号
+  var login = document.createElement("div");
+  login.textContent = (u && u.login) ? "@" + u.login : "";
+  login.style.cssText = "font-size:13px;color:var(--text-secondary,#9a9a9a);margin-bottom:16px;";
+  panel.appendChild(login);
+  // GitHub 主页链接
+  if (u && u.login) {
+    var link = document.createElement("a");
+    link.href = "https://github.com/" + u.login;
+    link.target = "_blank";
+    link.textContent = "查看 GitHub 主页";
+    link.style.cssText = "font-size:12px;color:var(--accent,#4c9aff);text-decoration:none;display:block;margin-bottom:16px;";
+    panel.appendChild(link);
+  }
+  // 按钮行
+  var btns = document.createElement("div");
+  btns.style.cssText = "display:flex;gap:8px;justify-content:center;";
+  var logout = document.createElement("button");
+  logout.type = "button";
+  logout.textContent = "登出";
+  logout.style.cssText = "padding:6px 20px;border-radius:8px;border:1px solid var(--error,#e5484d);background:transparent;color:var(--error,#e5484d);font-size:13px;cursor:pointer;";
+  logout.addEventListener("click", function () {
+    overlay.remove();
+    if (window.wenmoLogout) window.wenmoLogout();
+  });
+  var cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = "取消";
+  cancel.style.cssText = "padding:6px 20px;border-radius:8px;border:1px solid var(--border-strong);background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer;";
+  cancel.addEventListener("click", function () { overlay.remove(); });
+  btns.appendChild(logout);
+  btns.appendChild(cancel);
+  panel.appendChild(btns);
+  overlay.appendChild(panel);
+  overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 /** 统计栏（上下文/本对话/缓存/命中率/费用）每 60 秒自动刷新一次，
