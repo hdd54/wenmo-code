@@ -59,3 +59,6 @@ settings.json
 
 # ---- 用户数据（登录）----
 users.jsonsessions.json
+
+# ---- 项目配置（含本地路径）----
+projects.json
