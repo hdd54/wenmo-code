@@ -1,0 +1,18 @@
+# 精确版本锁（部署用）：pip install -r requirements.lock
+# 若首次安装缺依赖，先 pip install -r requirements.txt 再锁版本
+fastapi==0.140.0
+uvicorn==0.47.0
+openai==2.37.0
+pydantic==2.13.4
+latex2mathml==3.81.0
+lxml==5.2.1
+psutil==5.9.0
+matplotlib==3.10.9
+requests==2.32.2
+mcp==2.0.0
+python-docx==1.2.0
+python-pptx==1.0.2
+openpyxl==3.1.2
+PyMuPDF==1.28.0
+pypdf==6.13.2
+python-multipart==0.0.29

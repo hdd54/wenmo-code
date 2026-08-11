@@ -1,0 +1,86 @@
+{
+  "max_tools": 999,
+  "servers": {
+    "demo": {
+      "enabled": true,
+      "command": [
+        "${APP_DIR}/问墨.exe",
+        "--mcp-server",
+        "mcp_demo_server"
+      ],
+      "env": {}
+    },
+    "websearch": {
+      "enabled": true,
+      "command": [
+        "${APP_DIR}/问墨.exe",
+        "--mcp-server",
+        "websearch_mcp_server"
+      ],
+      "env": {}
+    },
+    "filesystem-mcp": {
+      "enabled": true,
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "${DATA_DIR}/workspace"
+      ],
+      "env": {}
+    },
+    "playwright": {
+      "enabled": true,
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp@latest",
+        "--browser",
+        "msedge"
+      ],
+      "env": {}
+    },
+    "file-mcp": {
+      "enabled": true,
+      "command": [
+        "${APP_DIR}/问墨.exe",
+        "--mcp-server",
+        "file_mcp_server"
+      ],
+      "env": {}
+    },
+    "ppt-pipeline": {
+      "enabled": true,
+      "command": [
+        "${APP_DIR}/问墨.exe",
+        "--mcp-server",
+        "ppt_pipeline_mcp_server"
+      ],
+      "env": {}
+    },
+    "page-agent": {
+      "enabled": true,
+      "command": [
+        "npx",
+        "-y",
+        "@page-agent/mcp"
+      ],
+      "env": {
+        "LLM_BASE_URL": "https://api.deepseek.com",
+        "LLM_API_KEY": "",
+        "LLM_MODEL_NAME": "deepseek-v4-flash"
+      }
+    },
+    "github-mcp": {
+      "enabled": true,
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+  }
+}
